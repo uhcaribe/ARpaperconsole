@@ -4,43 +4,114 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Paper Console AR</title>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    #gameCanvas { display: none; }
-    #ui { position: fixed; top: 16px; right: 16px; color: white; font: bold 22px Arial; text-shadow: 0 0 8px rgba(0,0,0,0.9); z-index: 999; }
-    #status { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); color: white; font: 14px Arial; background: rgba(0,0,0,0.6); padding: 8px 20px; border-radius: 20px; z-index: 999; text-align: center; transition: opacity 0.4s; }
-    #btn-debug { position: fixed; top: 16px; left: 16px; background: rgba(0,0,0,0.7); color: #7DF9B0; font: 12px monospace; padding: 8px 12px; border-radius: 8px; z-index: 999; display: none; }
+
+    /* Feed de cámara — fondo completo */
+    #camera-feed {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    /* Canvas del juego — encima de la cámara */
+    #gameCanvas {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90vw;
+      max-width: 700px;
+      height: auto;
+      z-index: 10;
+      border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    }
+
+    #ui {
+      position: fixed; top: 16px; right: 16px;
+      color: white; font: bold 22px Arial;
+      text-shadow: 0 0 8px rgba(0,0,0,0.9);
+      z-index: 999;
+    }
+
+    #status {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%);
+      color: white; font: 14px Arial;
+      background: rgba(0,0,0,0.6); padding: 8px 20px;
+      border-radius: 20px; z-index: 999; text-align: center;
+    }
+
+    /* Pantalla de inicio */
+    #start-screen {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #111; z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 24px;
+    }
+    #start-screen h1 { color: white; font: bold 28px Arial; text-align: center; }
+    #start-screen p  { color: #aaa; font: 16px Arial; text-align: center; padding: 0 40px; line-height: 1.5; }
+    #start-btn {
+      padding: 18px 48px; font-size: 22px; font-weight: bold;
+      border-radius: 50px; border: none; cursor: pointer;
+      background: #7DF9B0; color: #000;
+    }
+
+    /* Indicador del botón */
+    #btn-indicator {
+      position: fixed; bottom: 70px; right: 20px;
+      width: 60px; height: 60px; border-radius: 50%;
+      border: 3px solid rgba(125,249,176,0.5);
+      z-index: 999;
+      display: flex; align-items: center; justify-content: center;
+      color: rgba(125,249,176,0.8); font: bold 10px Arial;
+      text-align: center;
+      transition: background 0.1s;
+    }
+    #btn-indicator.active { background: rgba(125,249,176,0.3); }
   </style>
 </head>
 <body>
 
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
-  <div id="ui"><span id="score">Score: 0</span></div>
-  <div id="status">📷 Apunta la cámara al papel...</div>
-  <div id="btn-debug">Iniciando detector...</div>
+  <!-- Pantalla de inicio -->
+  <div id="start-screen">
+    <h1>🎮 Paper Console AR</h1>
+    <p>Apunta la cámara a tu consola de papel.<br>Tapa el botón azul para saltar.</p>
+    <button id="start-btn">INICIAR</button>
+  </div>
 
-  <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes; uiError: yes;"
-    color-space="sRGB"
-    renderer="colorManagement: true; logarithmicDepthBuffer: true"
-xrweb="allowedDevices: any"
-    vr-mode-ui="enabled: false"
-    embedded
-    device-orientation-permission-ui="enabled: false">
-    <a-assets>
-      <canvas id="arCanvas" width="800" height="400"></canvas>
-    </a-assets>
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <a-entity mindar-image-target="targetIndex: 0">
-      <a-plane id="game-plane" position="0 0 0.001" rotation="0 0 0" width="1.4" height="0.7"
-        material="shader: flat; src: #arCanvas; transparent: false">
-      </a-plane>
-    </a-entity>
-  </a-scene>
+  <!-- Feed de cámara -->
+  <video id="camera-feed" autoplay playsinline muted></video>
+
+  <!-- Canvas del juego -->
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+  <!-- UI -->
+  <div id="ui"><span id="score">Score: 0</span></div>
+  <div id="status">📷 Apunta al papel y tapa el botón azul para saltar</div>
+  <div id="btn-indicator">BTN</div>
 
   <script>
+  // ── CÁMARA ────────────────────────────────────────────────────────
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      const video = document.getElementById('camera-feed');
+      video.srcObject = stream;
+      return video;
+    } catch (e) {
+      console.error('Error cámara:', e);
+      document.getElementById('status').textContent = '❌ No se pudo acceder a la cámara';
+      return null;
+    }
+  }
+
+  // ── JUEGO ─────────────────────────────────────────────────────────
   class Game {
     constructor() {
       this.canvas = document.getElementById('gameCanvas');
@@ -48,7 +119,7 @@ xrweb="allowedDevices: any"
       this.canvas.width  = 800;
       this.canvas.height = 400;
       this.gameRunning = true;
-      this.gamePaused  = true;
+      this.gamePaused  = false;
       this.score = 0;
       this.player = {
         x: 80, y: 0, vy: 0, vx: 0,
@@ -79,10 +150,9 @@ xrweb="allowedDevices: any"
       Object.values(this.images).forEach(img => {
         img.onload  = () => {
           if (++loaded === total) {
-            // Controles — se registran solo cuando todas las imagenes cargaron
             document.addEventListener('keydown', (e) => { if (e.code === 'Space') this.jump(); });
             document.addEventListener('click',      () => this.jump());
-            document.addEventListener('touchstart', () => this.jump());
+            document.addEventListener('touchstart', () => this.jump(), { passive: true });
             this.gameLoop();
           }
         };
@@ -102,8 +172,7 @@ xrweb="allowedDevices: any"
       const fc  = p.jumping ? 8 : 6;
       let sh, sy;
       if (img.complete && img.width > 0) {
-        const fw = img.width / fc;
-        const sc = p.drawW / fw;
+        const fw = img.width / fc, sc = p.drawW / fw;
         sh = img.height * sc; sy = p.y - sh;
       } else { sh = 130; sy = p.y - 130; }
       const mx = p.jumping ? 70 : 20, my = p.jumping ? 5 : 10;
@@ -139,7 +208,7 @@ xrweb="allowedDevices: any"
         if (this.obstacles[i].x < -50) { this.obstacles.splice(i, 1); this.score += 10; }
         else if (this.checkCollision(this.player, this.obstacles[i])) this.gameOver();
       }
-      this.bgX -= 1;   if (this.bgX   <= -this.canvas.width) this.bgX   = 0;
+      this.bgX -= 1;    if (this.bgX    <= -this.canvas.width) this.bgX    = 0;
       this.mid1AX -= 4; if (this.mid1AX <= -this.canvas.width) this.mid1AX = this.canvas.width;
       this.mid1BX -= 4; if (this.mid1BX <= -this.canvas.width) this.mid1BX = this.canvas.width;
       this.mid2X  -= 4; if (this.mid2X  <= -this.canvas.width) this.mid2X  = 0;
@@ -151,13 +220,12 @@ xrweb="allowedDevices: any"
       const c = this.ctx;
       c.fillStyle = '#87CEEB';
       c.fillRect(0, 0, this.canvas.width, this.canvas.height);
-      c.drawImage(this.images.background, this.bgX,                  0, this.canvas.width, this.canvas.height);
-      c.drawImage(this.images.background, this.bgX + this.canvas.width, 0, this.canvas.width, this.canvas.height);
-      c.drawImage(this.images.midground,  this.mid1AX,               0, this.canvas.width, this.canvas.height);
-      c.drawImage(this.images.midground,  this.mid1BX,               0, this.canvas.width, this.canvas.height);
-      c.drawImage(this.images.midground2, this.mid2X,                0, this.canvas.width, this.canvas.height);
+      c.drawImage(this.images.background, this.bgX,                     0, this.canvas.width, this.canvas.height);
+      c.drawImage(this.images.background, this.bgX + this.canvas.width,  0, this.canvas.width, this.canvas.height);
+      c.drawImage(this.images.midground,  this.mid1AX,                  0, this.canvas.width, this.canvas.height);
+      c.drawImage(this.images.midground,  this.mid1BX,                  0, this.canvas.width, this.canvas.height);
+      c.drawImage(this.images.midground2, this.mid2X,                   0, this.canvas.width, this.canvas.height);
       c.drawImage(this.images.midground2, this.mid2X + this.canvas.width, 0, this.canvas.width, this.canvas.height);
-
       const img = this.player.jumping ? this.images.jump : this.images.run;
       const fi  = this.player.jumping ? this.jumpFrame   : this.frame;
       const fc  = this.player.jumping ? 8 : 6;
@@ -167,15 +235,10 @@ xrweb="allowedDevices: any"
         this.player.spriteHeight = dh; this.player.spriteY = dy;
         c.drawImage(img, fi * fw, 0, fw, img.height, this.player.x, dy, this.player.drawW, dh);
       }
-
       c.fillStyle = '#FF6B3D';
       for (const obs of this.obstacles) c.fillRect(obs.x, obs.y, obs.width, obs.height);
-
-      c.drawImage(this.images.foreground, this.fgX,                0, this.canvas.width, this.canvas.height);
-      c.drawImage(this.images.foreground, this.fgX + this.canvas.width, 0, this.canvas.width, this.canvas.height);
-
-      const ar = document.getElementById('arCanvas');
-      if (ar) ar.getContext('2d').drawImage(this.canvas, 0, 0);
+      c.drawImage(this.images.foreground, this.fgX,                     0, this.canvas.width, this.canvas.height);
+      c.drawImage(this.images.foreground, this.fgX + this.canvas.width,  0, this.canvas.width, this.canvas.height);
       document.getElementById('score').textContent = 'Score: ' + Math.floor(this.score / 10);
     }
 
@@ -206,34 +269,24 @@ xrweb="allowedDevices: any"
       requestAnimationFrame(() => this.gameLoop());
     }
   }
-navigator.mediaDevices.getUserMedia({ video: true });
-  window._game = new Game();
-  window._game.gamePaused = false;
-  </script>
 
-  <script>
+  // ── DETECTOR DE BOTÓN AZUL ────────────────────────────────────────
   const BTN = {
     zone:      { x:0.852, y:0.456, w:0.062, h:0.078 },
     threshold: 0.20,
     video: null, canvas: null, ctx: null,
     pressed: false, occludedFrames: 0, debounce: 3,
     cooldown: 300, lastFire: 0, running: false,
+    indicator: null,
 
-    init() {
-      this.canvas = document.createElement('canvas');
-      this.ctx    = this.canvas.getContext('2d');
-      const find = () => {
-        const vids = document.querySelectorAll('video');
-        for (const v of vids) if (v.videoWidth > 0) return v;
-        return null;
-      };
-      const tryStart = () => {
-        this.video = find();
-        if (!this.video) { setTimeout(tryStart, 300); return; }
-        this.running = true;
-        this.tick();
-      };
-      tryStart();
+    init(videoEl) {
+      this.video     = videoEl;
+      this.canvas    = document.createElement('canvas');
+      this.ctx       = this.canvas.getContext('2d');
+      this.indicator = document.getElementById('btn-indicator');
+      this.running   = true;
+      this.tick();
+      console.log('[BTN] Iniciado');
     },
 
     analyze() {
@@ -256,6 +309,13 @@ navigator.mediaDevices.getUserMedia({ video: true });
       if (!this.running) return;
       const presence = this.analyze();
       const occluded = presence < this.threshold;
+
+      // Indicador visual
+      if (this.indicator) {
+        this.indicator.classList.toggle('active', occluded);
+        this.indicator.textContent = occluded ? '👆' : 'BTN';
+      }
+
       if (occluded) {
         this.occludedFrames++;
         if (this.occludedFrames >= this.debounce && !this.pressed) {
@@ -273,32 +333,27 @@ navigator.mediaDevices.getUserMedia({ video: true });
       requestAnimationFrame(() => this.tick());
     },
 
-    setZone(z)      { Object.assign(this.zone, z); },
-    setThreshold(t) { this.threshold = t; },
-    showDebug()     { document.getElementById('btn-debug').style.display = 'block'; },
-    hideDebug()     { document.getElementById('btn-debug').style.display = 'none'; },
+    setZone(z)      { Object.assign(this.zone, z); console.log('[BTN] Zona:', this.zone); },
+    setThreshold(t) { this.threshold = t; console.log('[BTN] Threshold:', t); },
   };
   window.BTN = BTN;
-  </script>
 
-  <script>
-  document.querySelector('a-scene').addEventListener('loaded', () => {
-    const target   = document.querySelector('[mindar-image-target]');
-    const statusEl = document.getElementById('status');
+  // ── INICIO ────────────────────────────────────────────────────────
+  document.getElementById('start-btn').addEventListener('click', async () => {
+    document.getElementById('start-screen').style.display = 'none';
 
-    target.addEventListener('targetFound', () => {
-      statusEl.style.opacity = '0';
-      if (window._game) window._game.gamePaused = false;
-      if (!BTN.running) BTN.init();
-      else BTN.running = true;
-    });
+    // Iniciar cámara
+    const videoEl = await startCamera();
 
-    target.addEventListener('targetLost', () => {
-      statusEl.style.opacity = '1';
-      statusEl.textContent = '📷 Apunta la cámara al papel...';
-      if (window._game) window._game.gamePaused = true;
-      BTN.running = false;
-    });
+    // Iniciar juego
+    window._game = new Game();
+
+    // Iniciar detector cuando el video esté listo
+    if (videoEl) {
+      videoEl.addEventListener('loadedmetadata', () => {
+        BTN.init(videoEl);
+      });
+    }
   });
   </script>
 
