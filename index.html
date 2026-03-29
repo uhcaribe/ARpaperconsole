@@ -27,6 +27,7 @@
     renderer="colorManagement: true; logarithmicDepthBuffer: true"
 xrweb="allowedDevices: any"
     vr-mode-ui="enabled: false"
+    embedded
     device-orientation-permission-ui="enabled: false">
     <a-assets>
       <canvas id="arCanvas" width="800" height="400"></canvas>
@@ -207,6 +208,7 @@ xrweb="allowedDevices: any"
   }
 navigator.mediaDevices.getUserMedia({ video: true });
   window._game = new Game();
+  window._game.gamePaused = false;
   </script>
 
   <script>
