@@ -151,7 +151,6 @@
         img.onload  = () => {
           if (++loaded === total) {
             document.addEventListener('keydown', (e) => { if (e.code === 'Space') this.jump(); });
-            document.addEventListener('click',      () => this.jump());
             this.gameLoop();
           }
         };
