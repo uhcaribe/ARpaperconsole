@@ -152,7 +152,6 @@
           if (++loaded === total) {
             document.addEventListener('keydown', (e) => { if (e.code === 'Space') this.jump(); });
             document.addEventListener('click',      () => this.jump());
-            document.addEventListener('touchstart', () => this.jump(), { passive: true });
             this.gameLoop();
           }
         };
