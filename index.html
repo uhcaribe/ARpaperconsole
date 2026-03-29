@@ -24,7 +24,8 @@
   <a-scene
     mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes; uiError: yes;"
     color-space="sRGB"
-    renderer="colorManagement: true"
+    renderer="colorManagement: true; logarithmicDepthBuffer: true"
+xrweb="allowedDevices: any"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
     <a-assets>
